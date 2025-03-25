@@ -749,16 +749,33 @@ function constructRegexReplacePattern (provider: string, productId: string): str
     return `https:\/\/[A-Za-z0-9.]*${provider}.sg\/${productId}`;
 }
 
-function postprocessOutput(output: string, productIdGroup: Record<string, any[]>): string {
-    // Replace the fake link in the output with the real link
+function postprocessOutput(output: string, productIdGroup: Record<string, any[]>): string {    
+    // Create result object with initial content
+    let result = {
+        content: output,
+        productLinkIds: [] as string[]
+    }
+    
+    // Replace the fake links and collect product IDs only if replacement occurred
     for (const [productId, rows] of Object.entries(productIdGroup)) {
         rows.forEach((row) => {
             let regexReplacePattern = constructRegexReplacePattern(row.provider, productId)
-            output = output.replace(new RegExp(regexReplacePattern, 'g'), row.link)
+            const regex = new RegExp(regexReplacePattern, 'g')
+            const newContent = result.content.replace(regex, row.link)
+            
+            // Check if the content actually changed
+            if (newContent !== result.content) {
+                result.content = newContent
+                // Only push productId if it hasn't been added yet
+                if (!result.productLinkIds.includes(row.id)) {
+                    result.productLinkIds.push(row.id)
+                }
+            }
         })
     }
 
-    return output;
+    console.log("**postprocessOutput result:", result)
+    return JSON.stringify(result)
 }
 
 async function agentNode(
@@ -856,6 +873,7 @@ async function agentNode(
             console.log("Running postprocessing to replace the fake link in the output with the real link")
             outputContent = postprocessOutput(outputContent, result.artifacts[0])
         }
+        console.log("**outputContent in agentNode: ", outputContent)
 
         if (nodeData.inputs?.updateStateMemoryUI || nodeData.inputs?.updateStateMemoryCode) {
             let formattedOutput = {
